@@ -1,5 +1,6 @@
 name: Build LAgence Pixel Control APK
 
+# rebuild 2 — correctifs Kotlin appliqués
 on:
   workflow_dispatch:
   push:
