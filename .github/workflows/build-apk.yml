@@ -1,0 +1,101 @@
+name: Build LAgence Pixel Control APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'bundle/**'
+      - 'patch.sh'
+      - '.github/workflows/build-apk.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Installer Android 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Reconstruire et vérifier les sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat \
+            bundle/part-00 \
+            bundle/part-01 \
+            bundle/part-02 \
+            bundle/part-03 \
+            bundle/part-04-05 \
+            bundle/part-06-07 \
+            bundle/part-08-09 \
+            bundle/part-10 > project.tar.xz.b64
+          base64 --decode project.tar.xz.b64 > project.tar.xz
+          echo 'ca3356922baa556fe0f16aadb77cb3053f91c3eb1ea794c7d2daf33955be255d  project.tar.xz' | sha256sum --check
+          tar -xJf project.tar.xz
+          test -f project/settings.gradle
+          test -f project/app/build.gradle
+          test -f project/app/src/main/AndroidManifest.xml
+          if [[ -f patch.sh ]]; then bash patch.sh; fi
+
+      - name: Compiler et tester
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --version
+          gradle --no-daemon -p project clean testDebugUnitTest assembleDebug --stacktrace 2>&1 | tee build.log
+
+      - name: Vérifier l'APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p output
+          APK='project/app/build/outputs/apk/debug/app-debug.apk'
+          test -s "$APK"
+          cp "$APK" output/LAgence-Pixel-Control-v4.1.0-debug.apk
+          unzip -t output/LAgence-Pixel-Control-v4.1.0-debug.apk | tee output/APK_ZIP_TEST.txt
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs output/LAgence-Pixel-Control-v4.1.0-debug.apk | tee output/APK_SIGNATURE.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging output/LAgence-Pixel-Control-v4.1.0-debug.apk | tee output/APK_BADGING.txt
+          sha256sum output/LAgence-Pixel-Control-v4.1.0-debug.apk | tee output/SHA256SUMS.txt
+
+      - name: Publier l'APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: LAgence-Pixel-Control-v4.1.0-debug
+          path: output/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publier le journal de compilation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: LAgence-Pixel-Control-v4.1.0-build-log
+          path: build.log
+          if-no-files-found: warn
+          retention-days: 30
