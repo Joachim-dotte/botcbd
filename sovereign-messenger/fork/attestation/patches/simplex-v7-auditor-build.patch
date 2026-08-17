@@ -46,7 +46,7 @@ index 9884536..19e08d4 100644
    defaultConfig {
      minSdk = 26
 diff --git a/apps/multiplatform/gradle.properties b/apps/multiplatform/gradle.properties
-index b4a7b43..REDACTED 100644
+index b4a7b43..cfcc8bf 100644
 --- a/apps/multiplatform/gradle.properties
 +++ b/apps/multiplatform/gradle.properties
 @@ -15,6 +15,7 @@ org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
