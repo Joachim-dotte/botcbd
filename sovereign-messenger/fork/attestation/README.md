@@ -79,9 +79,9 @@ cd /path/to/simplex-chat-v7.0.0/apps/multiplatform
   :android:assembleDebug
 ```
 
-The build patch adds `:auditor-alpha`, the Android-source-set dependency, compile SDK 36 and the
-temporary AGP 8.7 unsupported-compile-SDK acknowledgement. The app keeps min SDK 26, but the helper
-and UI refuse to launch Auditor below API 33.
+The build patch adds `:auditor-alpha`, the Android-source-set dependency, compile SDK 36 and AGP
+8.9.1. This Pixel/GrapheneOS alpha deliberately sets min SDK 34: Java records are native from
+Android 14, and older platform releases are outside its supported security profile.
 
 Until the core database owns a random token, the Android actual derives a stable 32-byte scope token
 as `HMAC-SHA-256(domain || contactId)` using a non-exportable Android Keystore key. The key must be
@@ -123,11 +123,9 @@ Important limits:
   peer trust state.
 - The host is part of the trusted computing base. A compromised verifier app/process can forge its
   own local cache and UI.
-- Android 13 (API 33) is the upstream minimum. The library overlay declares the host-compatible
-  manifest floor API 26 solely so it can merge into SimpleX, while `createIntent` hard-disables the
-  feature below API 33 and both activities are non-exported. This packaging adaptation is not an
-  upstream support claim and must be tested on every supported release; no Auditor code path may be
-  made reachable below API 33.
+- The integrated alpha requires Android 14 (API 34) or newer and both Auditor activities are
+  non-exported. It must still be tested on every supported Pixel/GrapheneOS release; raising the
+  installation floor does not prove runtime safety.
 
 Before any production use, bind a fresh challenge to the already verified SimpleX security-code
 digest and transcript, persist authoritative state transactionally in the core database, add
