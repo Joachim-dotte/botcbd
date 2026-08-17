@@ -16,9 +16,9 @@ android {
     namespace = "app.attestation.auditor"
 
     defaultConfig {
-        // The host keeps its existing manifest floor. Every public entry point is runtime-gated
-        // to API 33+, which remains Auditor's actual supported minimum.
-        minSdk = 26
+        // Java records are native from API 34. This GrapheneOS/Pixel-only alpha
+        // intentionally fails installation on older, unsupported platform releases.
+        minSdk = 34
         consumerProguardFiles("proguard-rules.pro")
         resourceConfigurations += listOf("en")
     }
