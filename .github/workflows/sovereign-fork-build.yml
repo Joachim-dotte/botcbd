@@ -86,8 +86,9 @@ jobs:
             echo "application_id.suffix=.sovereign.alpha"
             echo "app.name=Sovereign Messenger Alpha"
           } > local.properties
-          perl -0pi -e 's/include\("armeabi-v7a",\s*"arm64-v8a"\)/include("arm64-v8a")/' android/build.gradle.kts
-          grep -F 'include("arm64-v8a")' android/build.gradle.kts
+          perl -0pi -e 's/defaultConfig\.ndk\.abiFilters\([^)]*\)/defaultConfig.ndk.abiFilters("arm64-v8a")/g; s/include\("arm64-v8a",\s*"armeabi-v7a"\)/include("arm64-v8a")/g' android/build.gradle.kts
+          grep -F 'defaultConfig.ndk.abiFilters("arm64-v8a")' android/build.gradle.kts
+          test "$(grep -Fc 'include("arm64-v8a")' android/build.gradle.kts)" -ge 1
 
       - name: Build Android alpha
         shell: bash
