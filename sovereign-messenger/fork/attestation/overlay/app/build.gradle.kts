@@ -19,6 +19,7 @@ android {
         // to API 33+, which remains Auditor's actual supported minimum.
         minSdk = 26
         consumerProguardFiles("proguard-rules.pro")
+        resourceConfigurations += listOf("en")
     }
 
     compileOptions {
@@ -40,7 +41,6 @@ android {
     }
 
     androidResources {
-        localeFilters += listOf("en")
         noCompress += listOf("dex")
     }
 }
