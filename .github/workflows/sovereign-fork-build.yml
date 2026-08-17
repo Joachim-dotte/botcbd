@@ -108,8 +108,8 @@ jobs:
           mapfile -t apks < <(find simplex-chat/apps/multiplatform/android/build/outputs/apk/debug -type f -name '*.apk' | sort)
           test "${#apks[@]}" -ge 1
           cp "${apks[0]}" dist/Sovereign-Messenger-v0.1.0-alpha-arm64.apk
-          apksigner verify --verbose --print-certs dist/Sovereign-Messenger-v0.1.0-alpha-arm64.apk | tee dist/APKSIGNER-VERIFY.txt
-          aapt dump badging dist/Sovereign-Messenger-v0.1.0-alpha-arm64.apk | tee dist/APK-BADGING.txt
+          "$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" verify --verbose --print-certs dist/Sovereign-Messenger-v0.1.0-alpha-arm64.apk | tee dist/APKSIGNER-VERIFY.txt
+          "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt" dump badging dist/Sovereign-Messenger-v0.1.0-alpha-arm64.apk | tee dist/APK-BADGING.txt
           sha256sum dist/Sovereign-Messenger-v0.1.0-alpha-arm64.apk | tee dist/SHA256SUMS
           cp upstream-commit.txt native-core.sha256 dist/
           {
