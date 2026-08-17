@@ -1,0 +1,50 @@
+diff --git a/apps/multiplatform/common/src/commonMain/kotlin/chat/simplex/common/views/usersettings/SettingsView.kt b/apps/multiplatform/common/src/commonMain/kotlin/chat/simplex/common/views/usersettings/SettingsView.kt
+--- a/apps/multiplatform/common/src/commonMain/kotlin/chat/simplex/common/views/usersettings/SettingsView.kt
++++ b/apps/multiplatform/common/src/commonMain/kotlin/chat/simplex/common/views/usersettings/SettingsView.kt
+@@ -96,6 +96,7 @@ fun SettingsLayout(
+     SectionView {
+       SettingsActionItem(painterResource(MR.images.ic_light_mode), stringResource(MR.strings.appearance_settings), showSettingsModal { AppearanceView(it) })
+       SettingsActionItem(painterResource(MR.images.ic_lock), stringResource(MR.strings.your_privacy), showSettingsModal { PrivacySettingsView(it, showSettingsModal, setPerformLA) }, disabled = stopped)
++      SettingsActionItem(painterResource(MR.images.ic_security), "Registre Sovereign", showSettingsModal { SovereignRegistryView(it) })
+       SettingsActionItem(painterResource(MR.images.ic_help), stringResource(MR.strings.help_and_support), showSettingsModal { HelpAndSupportView(it, showModal, showCustomModal) })
+       DatabaseItem(encrypted, passphraseSaved, showSettingsModal { DatabaseView() }, stopped)
+       SettingsActionItem(painterResource(MR.images.ic_ios_share), stringResource(MR.strings.migrate_from_device_to_another_device), { withAuth(generalGetString(MR.strings.auth_open_migration_to_another_device), generalGetString(MR.strings.auth_log_in_using_credential)) { ModalManager.fullscreen.showCustomModal { close -> MigrateFromDeviceView(close) } } }, disabled = stopped)
+diff --git a/apps/multiplatform/common/src/commonMain/kotlin/chat/simplex/common/views/usersettings/DeveloperView.kt b/apps/multiplatform/common/src/commonMain/kotlin/chat/simplex/common/views/usersettings/DeveloperView.kt
+--- a/apps/multiplatform/common/src/commonMain/kotlin/chat/simplex/common/views/usersettings/DeveloperView.kt
++++ b/apps/multiplatform/common/src/commonMain/kotlin/chat/simplex/common/views/usersettings/DeveloperView.kt
+@@ -46,6 +46,11 @@ fun DeveloperView(withAuth: (title: String, desc: String, block: () -> Unit) ->
+             onCheckedChange = { appPrefs.logLevel.set(if (it) LogLevel.DEBUG else LogLevel.WARNING) }
+           )
+         }
++        SettingsActionItem(painterResource(MR.images.ic_security), "Journal structure Sovereign", click = {
++          withAuth("Ouvrir le journal Sovereign", "Authentifiez-vous pour afficher le journal") {
++            ModalManager.start.showModalCloseable { SovereignDiagnosticLogView() }
++          }
++        })
+         SettingsPreferenceItem(painterResource(MR.images.ic_drive_folder_upload), stringResource(MR.strings.confirm_database_upgrades), m.controller.appPrefs.confirmDBUpgrades)
+         if (appPlatform.isDesktop) {
+           TerminalAlwaysVisibleItem(m.controller.appPrefs.terminalAlwaysVisible) { checked ->
+diff --git a/apps/multiplatform/common/src/commonMain/kotlin/chat/simplex/common/views/chat/ChatInfoView.kt b/apps/multiplatform/common/src/commonMain/kotlin/chat/simplex/common/views/chat/ChatInfoView.kt
+--- a/apps/multiplatform/common/src/commonMain/kotlin/chat/simplex/common/views/chat/ChatInfoView.kt
++++ b/apps/multiplatform/common/src/commonMain/kotlin/chat/simplex/common/views/chat/ChatInfoView.kt
+@@ -591,6 +591,7 @@ fun ChatInfoLayout(
+     }
+
+     SectionView {
++      SovereignConversationSecurityButton(contact)
+       if (contact.ready && contact.active) {
+         if (connectionCode != null) {
+           VerifyCodeButton(contact.verified, verifyClicked)
+diff --git a/apps/multiplatform/common/src/commonMain/kotlin/chat/simplex/common/views/chat/ChatView.kt b/apps/multiplatform/common/src/commonMain/kotlin/chat/simplex/common/views/chat/ChatView.kt
+--- a/apps/multiplatform/common/src/commonMain/kotlin/chat/simplex/common/views/chat/ChatView.kt
++++ b/apps/multiplatform/common/src/commonMain/kotlin/chat/simplex/common/views/chat/ChatView.kt
+@@ -1573,6 +1573,9 @@ fun ChatInfoToolbarTitle(cInfo: ChatInfo, imageSize: Dp = 40.dp, iconColor: Colo
+         if ((cInfo as? ChatInfo.Direct)?.contact?.verified == true) {
+           ContactVerifiedShield()
+         }
++        if (cInfo is ChatInfo.Direct) {
++          SovereignConversationBadge(cInfo.contact)
++        }
+         NameWithBadge(
+           cInfo.displayName, cInfo.nameBadge, fontWeight = FontWeight.SemiBold,
+           maxLines = 1, overflow = TextOverflow.Ellipsis

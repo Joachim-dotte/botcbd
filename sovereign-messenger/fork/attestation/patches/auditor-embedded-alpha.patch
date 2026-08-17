@@ -1,0 +1,242 @@
+diff --git a/app/src/main/java/app/attestation/auditor/AttestationActivity.java b/app/src/main/java/app/attestation/auditor/AttestationActivity.java
+index f7cd4c5..45f533a 100644
+--- a/app/src/main/java/app/attestation/auditor/AttestationActivity.java
++++ b/app/src/main/java/app/attestation/auditor/AttestationActivity.java
+@@ -44,7 +44,6 @@ import com.google.zxing.common.BitMatrix;
+ import com.google.zxing.qrcode.QRCodeWriter;
+ 
+ import java.io.IOException;
+-import java.nio.BufferUnderflowException;
+ import java.nio.charset.StandardCharsets;
+ import java.security.GeneralSecurityException;
+ import java.util.EnumMap;
+@@ -90,6 +89,7 @@ public class AttestationActivity extends AppCompatActivity {
+     private boolean auditeePairing;
+     private byte[] auditeeSerializedAttestation;
+     private byte[] auditorChallenge;
++    private byte[] scopeToken;
+     private int backgroundResource;
+ 
+     final ActivityResultLauncher<Intent> QRScannerActivityLauncher = registerForActivityResult(
+@@ -176,6 +176,14 @@ public class AttestationActivity extends AppCompatActivity {
+         EdgeToEdge.enable(this);
+         super.onCreate(savedInstanceState);
+ 
++        try {
++            scopeToken = SovereignAuditorAlpha.requireScopeToken(getIntent());
++        } catch (final IllegalArgumentException e) {
++            Log.e(TAG, "refusing unscoped attestation launch", e);
++            finish();
++            return;
++        }
++
+         binding = ActivityAttestationBinding.inflate(getLayoutInflater());
+         View rootView = binding.getRoot();
+         setContentView(rootView);
+@@ -262,26 +270,15 @@ public class AttestationActivity extends AppCompatActivity {
+             }
+         });
+ 
+-        RemoteVerifyJob.restore(this);
+     }
+ 
+     @Override
+     protected void onResume() {
+         super.onResume();
+-        final boolean isRemoteVerifyEnabled = RemoteVerifyJob.isEnabled(this);
+-        int visibility = View.VISIBLE;
+-        if (isRemoteVerifyEnabled) {
+-            visibility = View.GONE;
+-        }
+-        binding.content.remoteVerify.setVisibility(visibility);
+-        binding.content.remoteVerify.setOnClickListener(view -> {
+-            if (!isSupportedAuditee) {
+-                snackbar.setText(R.string.unsupported_auditee).show();
+-                return;
+-            }
+-            stage = Stage.EnableRemoteVerify;
+-            startQrScanner();
+-        });
++        // This embedded alpha deliberately exposes local QR verification only. Remote verification
++        // and sample submission belong to the standalone Auditor app and are not host-app features.
++        binding.content.remoteVerify.setVisibility(View.GONE);
++        binding.content.remoteVerify.setOnClickListener(null);
+     }
+ 
+     @Override
+@@ -337,6 +334,9 @@ public class AttestationActivity extends AppCompatActivity {
+         executor.submit(() -> {
+             try {
+                 final AttestationProtocol.VerificationResult result = AttestationProtocol.verifySerialized(this, serialized, auditorChallenge);
++                SovereignAuditorAlpha.writeStatus(this, scopeToken,
++                        result.strong() ? SovereignAuditorAlpha.Verdict.VERIFIED_STRONG :
++                                SovereignAuditorAlpha.Verdict.VERIFIED_BASIC);
+                 runOnUiThread(() -> {
+                     setBackgroundResource(result.strong() ? R.color.green : R.color.orange);
+                     binding.content.textview.setText(result.strong() ? R.string.verify_strong : R.string.verify_basic);
+@@ -349,9 +349,10 @@ public class AttestationActivity extends AppCompatActivity {
+                         binding.content.textview.append(result.history());
+                     }
+                 });
+-            } catch (final BufferUnderflowException | DataFormatException |
+-                    GeneralSecurityException | NegativeArraySizeException e) {
++            } catch (final DataFormatException | GeneralSecurityException | RuntimeException e) {
+                 Log.e(TAG, "attestation verification error", e);
++                SovereignAuditorAlpha.writeStatus(
++                        this, scopeToken, SovereignAuditorAlpha.Verdict.REJECTED);
+                 runOnUiThread(() -> {
+                     setBackgroundResource(R.color.red);
+                     binding.content.textview.setText(R.string.verify_error);
+diff --git a/app/src/main/java/app/attestation/auditor/AttestationProtocol.java b/app/src/main/java/app/attestation/auditor/AttestationProtocol.java
+index 0550f64..84cd317 100644
+--- a/app/src/main/java/app/attestation/auditor/AttestationProtocol.java
++++ b/app/src/main/java/app/attestation/auditor/AttestationProtocol.java
+@@ -7,8 +7,10 @@ import android.content.ComponentName;
+ import android.content.Context;
+ import android.content.SharedPreferences;
+ import android.content.pm.ApplicationInfo;
++import android.content.pm.PackageInfo;
+ import android.content.pm.PackageManager;
+ import android.content.pm.PackageManager.ApplicationInfoFlags;
++import android.content.pm.PackageManager.PackageInfoFlags;
+ import android.os.Build;
+ import android.os.Bundle;
+ import android.os.SecurityStateManager;
+@@ -239,6 +241,7 @@ class AttestationProtocol {
+     private static final byte AUDITOR_APP_VARIANT_RELEASE = 0;
+     private static final byte AUDITOR_APP_VARIANT_PLAY = 1;
+     private static final byte AUDITOR_APP_VARIANT_DEBUG = 2;
++    private static final byte AUDITOR_APP_VARIANT_EMBEDDED_HOST = 3;
+ 
+     private static final int AUDITOR_APP_MINIMUM_VERSION = 89;
+     private static final int OS_VERSION_MINIMUM = 140000;
+@@ -496,7 +499,32 @@ class AttestationProtocol {
+         return (X509Certificate) CertificateFactory.getInstance("X.509").generateCertificate(in);
+     }
+ 
+-    private static Verified verifyStateless(final Certificate[] certificates,
++    private record LocalAppIdentity(String signatureDigest, long version) {}
++
++    private static LocalAppIdentity getLocalAppIdentity(final Context context)
++            throws GeneralSecurityException {
++        try {
++            final PackageManager pm = context.getPackageManager();
++            final PackageInfo packageInfo = pm.getPackageInfo(
++                    context.getPackageName(),
++                    PackageInfoFlags.of(PackageManager.GET_SIGNING_CERTIFICATES));
++            if (packageInfo.signingInfo == null) {
++                throw new GeneralSecurityException("local app signing information is missing");
++            }
++            final android.content.pm.Signature[] signatures =
++                    packageInfo.signingInfo.getApkContentsSigners();
++            if (signatures.length != 1) {
++                throw new GeneralSecurityException("local app must have exactly one APK signer");
++            }
++            final String digest = BaseEncoding.base16().encode(
++                    FINGERPRINT_HASH_FUNCTION.hashBytes(signatures[0].toByteArray()).asBytes());
++            return new LocalAppIdentity(digest, packageInfo.getLongVersionCode());
++        } catch (final PackageManager.NameNotFoundException e) {
++            throw new GeneralSecurityException(e);
++        }
++    }
++
++    private static Verified verifyStateless(final Context context, final Certificate[] certificates,
+             final byte[] challenge, final boolean hasPersistentKey, final byte[][] validRoots)
+             throws GeneralSecurityException {
+ 
+@@ -553,7 +581,17 @@ class AttestationProtocol {
+         final String signatureDigest = BaseEncoding.base16().encode(signatureDigests.get(0));
+         final byte appVariant;
+         final String packageName = info.packageName;
+-        if (AUDITOR_APP_PACKAGE_NAME_RELEASE.equals(packageName)) {
++        if (context.getPackageName().equals(packageName)) {
++            final LocalAppIdentity localAppIdentity = getLocalAppIdentity(context);
++            if (!localAppIdentity.signatureDigest.equals(signatureDigest)) {
++                throw new GeneralSecurityException("peer app signing key does not match this APK");
++            }
++            if (localAppIdentity.version != info.version) {
++                throw new GeneralSecurityException(
++                        "peer app version does not match this APK: " + info.version);
++            }
++            appVariant = AUDITOR_APP_VARIANT_EMBEDDED_HOST;
++        } else if (AUDITOR_APP_PACKAGE_NAME_RELEASE.equals(packageName)) {
+             if (!AUDITOR_APP_SIGNATURE_DIGEST_RELEASE.equals(signatureDigest)) {
+                 throw new GeneralSecurityException("invalid Auditor app signing key");
+             }
+@@ -575,7 +613,8 @@ class AttestationProtocol {
+             throw new GeneralSecurityException("invalid Auditor app package name: " + packageName);
+         }
+         final int appVersion = Math.toIntExact(info.version); // int for compatibility
+-        if (appVersion < AUDITOR_APP_MINIMUM_VERSION) {
++        if (appVariant != AUDITOR_APP_VARIANT_EMBEDDED_HOST &&
++                appVersion < AUDITOR_APP_MINIMUM_VERSION) {
+             throw new GeneralSecurityException("Auditor app is too old: " + appVersion);
+         }
+ 
+@@ -611,6 +650,13 @@ class AttestationProtocol {
+         if (device == null) {
+             throw new GeneralSecurityException("invalid verified boot key fingerprint: " + verifiedBootKey);
+         }
++        if (verifiedBootState != RootOfTrust.VerifiedBootState.SELF_SIGNED ||
++                device.osName != R.string.os_graphene) {
++            throw new GeneralSecurityException("this integration requires GrapheneOS verified boot");
++        }
++        if (attestationSecurityLevelEnum != ParsedAttestationRecord.SecurityLevel.STRONG_BOX) {
++            throw new GeneralSecurityException("this integration requires StrongBox key attestation");
++        }
+ 
+         // OS version sanity checks
+         final int osVersion = teeEnforced.osVersion.orElse(0);
+@@ -903,7 +949,7 @@ class AttestationProtocol {
+                     "\nIf the initial pairing was simply not completed, clear the pairing data on either the Auditee or the Auditor via the menu and try again.\n");
+         }
+ 
+-        final Verified verified = verifyStateless(attestationCertificates, challenge, hasPersistentKey,
++        final Verified verified = verifyStateless(context, attestationCertificates, challenge, hasPersistentKey,
+                 new byte[][]{readRawResource(context, R.raw.google_root_0),
+                     readRawResource(context, R.raw.google_root_1),
+                     readRawResource(context, R.raw.google_root_2),
+@@ -1034,6 +1080,8 @@ class AttestationProtocol {
+             appVariant = context.getString(R.string.auditor_app_variant_release);
+         } else if (verified.appVariant == AUDITOR_APP_VARIANT_PLAY) {
+             appVariant = context.getString(R.string.auditor_app_variant_play);
++        } else if (verified.appVariant == AUDITOR_APP_VARIANT_EMBEDDED_HOST) {
++            appVariant = context.getString(R.string.auditor_app_variant_embedded_host);
+         } else {
+             appVariant = context.getString(R.string.auditor_app_variant_debug);
+         }
+diff --git a/app/src/main/res/menu/menu_attestation.xml b/app/src/main/res/menu/menu_attestation.xml
+index 45ef2c9..8153d70 100644
+--- a/app/src/main/res/menu/menu_attestation.xml
++++ b/app/src/main/res/menu/menu_attestation.xml
+@@ -10,9 +10,11 @@
+             app:showAsAction="never" />
+     <item android:id="@+id/action_disable_remote_verify"
+             android:title="@string/action_disable_remote_verify"
++            android:visible="false"
+             app:showAsAction="never" />
+     <item android:id="@+id/action_submit_sample"
+             android:title="@string/action_submit_sample"
++            android:visible="false"
+             app:showAsAction="never" />
+     <item android:id="@+id/action_help"
+             android:title="@string/action_help"
+diff --git a/app/src/main/res/values/strings.xml b/app/src/main/res/values/strings.xml
+index e9fed02..477b5da 100644
+--- a/app/src/main/res/values/strings.xml
++++ b/app/src/main/res/values/strings.xml
+@@ -1,5 +1,6 @@
+ <resources>
+     <string name="app_name">Auditor</string>
++    <string name="sovereign_attestation_alpha_label">Local attestation (alpha)</string>
+     <string name="introduction">Two devices with Android 12 or higher are needed to perform verification:\n\n- The device to be verified (Auditee), which needs to be one of the supported devices.\n\n- An Android device to perform the verification (Auditor).\n\nThe verification process requires sending data between the devices by scanning QR codes.</string>
+     <string name="unsupported_auditee">Device is not one of the supported models.</string>
+     <string name="camera_permission_denied">Camera permission is required to scan QR codes.</string>
+@@ -76,6 +77,7 @@
+     <string name="auditor_app_variant_release">Release build signed by GrapheneOS</string>
+     <string name="auditor_app_variant_play">Release build signed by Play Store</string>
+     <string name="auditor_app_variant_debug">Debug build signed by GrapheneOS</string>
++    <string name="auditor_app_variant_embedded_host">Exact same host APK package, signer and version</string>
+     <string name="user_profile_secure">User profile secure: %s\n</string>
+     <string name="enrolled_biometrics">Enrolled biometrics: %s\n</string>
+     <string name="accessibility">Accessibility service(s) enabled: %s\n</string>

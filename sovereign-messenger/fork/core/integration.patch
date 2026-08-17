@@ -1,0 +1,129 @@
+diff --git a/simplex-chat.cabal b/simplex-chat.cabal
+index 8a73df74..2d1c50cc 100644
+--- a/simplex-chat.cabal
++++ b/simplex-chat.cabal
+@@ -32,6 +32,11 @@ flag client_postgres
+   manual: True
+   default: False
+ 
++flag sovereign-peer-anchor
++  description: Enable Sovereign peer checkpoint protocol (intentionally fails until fully implemented and audited).
++  manual: True
++  default: False
++
+ library
+   exposed-modules:
+       Simplex.Chat
+@@ -64,6 +69,8 @@ library
+       Simplex.Chat.Stats
+       Simplex.Chat.Store
+       Simplex.Chat.Store.AppSettings
++      Simplex.Chat.Store.Sovereign
++      Simplex.Chat.Sovereign.Types
+       Simplex.Chat.Store.Connections
+       Simplex.Chat.Store.ContactRequest
+       Simplex.Chat.Store.Delivery
+@@ -95,5 +102,7 @@ library
+           Simplex.Chat.Terminal.Output
+           Simplex.Chat.View
++  if flag(sovereign-peer-anchor)
++      cpp-options: -DSOVEREIGN_PEER_ANCHOR_UNIMPLEMENTED
+   if flag(client_postgres)
+       exposed-modules:
+           Simplex.Chat.Options.Postgres
+@@ -152,6 +161,7 @@ library
+           Simplex.Chat.Store.Postgres.Migrations.M20260715_profile_description
+           Simplex.Chat.Store.Postgres.Migrations.M20260716_signed_history
+           Simplex.Chat.Store.Postgres.Migrations.M20260720_server_roles
++          Simplex.Chat.Store.Postgres.Migrations.M20260817_sovereign_registry
+   else
+       exposed-modules:
+           Simplex.Chat.Archive
+@@ -321,6 +331,7 @@ library
+           Simplex.Chat.Store.SQLite.Migrations.M20260715_profile_description
+           Simplex.Chat.Store.SQLite.Migrations.M20260716_signed_history
+           Simplex.Chat.Store.SQLite.Migrations.M20260720_server_roles
++          Simplex.Chat.Store.SQLite.Migrations.M20260817_sovereign_registry
+   other-modules:
+       Paths_simplex_chat
+   hs-source-dirs:
+@@ -606,6 +617,7 @@ test-suite simplex-chat-test
+       ProtocolTests
+       RandomServers
+       RemoteTests
++      SovereignRegistryTests
+       ValidNames
+       ViewTests
+       API.Docs.Commands
+diff --git a/src/Simplex/Chat/Store/Postgres/Migrations.hs b/src/Simplex/Chat/Store/Postgres/Migrations.hs
+index a83510fb..4c3420e9 100644
+--- a/src/Simplex/Chat/Store/Postgres/Migrations.hs
++++ b/src/Simplex/Chat/Store/Postgres/Migrations.hs
+@@ -43,6 +43,7 @@ import Simplex.Chat.Store.Postgres.Migrations.M20260714_member_security_code
+ import Simplex.Chat.Store.Postgres.Migrations.M20260715_profile_description
+ import Simplex.Chat.Store.Postgres.Migrations.M20260716_signed_history
+ import Simplex.Chat.Store.Postgres.Migrations.M20260720_server_roles
++import Simplex.Chat.Store.Postgres.Migrations.M20260817_sovereign_registry
+ import Simplex.Messaging.Agent.Store.Shared (Migration (..))
+ 
+ schemaMigrations :: [(String, Text, Maybe Text)]
+@@ -90,7 +91,8 @@ schemaMigrations =
+     ("20260714_member_security_code", m20260714_member_security_code, Just down_m20260714_member_security_code),
+     ("20260715_profile_description", m20260715_profile_description, Just down_m20260715_profile_description),
+     ("20260716_signed_history", m20260716_signed_history, Just down_m20260716_signed_history),
+-    ("20260720_server_roles", m20260720_server_roles, Just down_m20260720_server_roles)
++    ("20260720_server_roles", m20260720_server_roles, Just down_m20260720_server_roles),
++    ("20260817_sovereign_registry", m20260817_sovereign_registry, Just down_m20260817_sovereign_registry)
+   ]
+ 
+ -- | The list of migrations in ascending order by date
+diff --git a/src/Simplex/Chat/Store/SQLite/Migrations.hs b/src/Simplex/Chat/Store/SQLite/Migrations.hs
+index 6ae93628..4fe86638 100644
+--- a/src/Simplex/Chat/Store/SQLite/Migrations.hs
++++ b/src/Simplex/Chat/Store/SQLite/Migrations.hs
+@@ -171,6 +171,7 @@ import Simplex.Chat.Store.SQLite.Migrations.M20260714_member_security_code
+ import Simplex.Chat.Store.SQLite.Migrations.M20260715_profile_description
+ import Simplex.Chat.Store.SQLite.Migrations.M20260716_signed_history
+ import Simplex.Chat.Store.SQLite.Migrations.M20260720_server_roles
++import Simplex.Chat.Store.SQLite.Migrations.M20260817_sovereign_registry
+ import Simplex.Messaging.Agent.Store.Shared (Migration (..))
+ 
+ schemaMigrations :: [(String, Query, Maybe Query)]
+@@ -339,7 +340,8 @@ schemaMigrations =
+     ("20260714_member_security_code", m20260714_member_security_code, Just down_m20260714_member_security_code),
+     ("20260715_profile_description", m20260715_profile_description, Just down_m20260715_profile_description),
+     ("20260716_signed_history", m20260716_signed_history, Just down_m20260716_signed_history),
+-    ("20260720_server_roles", m20260720_server_roles, Just down_m20260720_server_roles)
++    ("20260720_server_roles", m20260720_server_roles, Just down_m20260720_server_roles),
++    ("20260817_sovereign_registry", m20260817_sovereign_registry, Just down_m20260817_sovereign_registry)
+   ]
+ 
+ -- | The list of migrations in ascending order by date
+diff --git a/tests/Test.hs b/tests/Test.hs
+index 96ab620c..232986cd 100644
+--- a/tests/Test.hs
++++ b/tests/Test.hs
+@@ -23,6 +23,7 @@ import ProtocolTests
+ import OperatorTests
+ import RandomServers
+ import RemoteTests
++import SovereignRegistryTests
+ import Test.Hspec hiding (it)
+ import UnliftIO.Temporary (withTempDirectory)
+ import ValidNames
+@@ -72,6 +73,7 @@ main = do
+       describe "Message batching" batchingTests
+       describe "Operators" operatorTests
+       describe "Random servers" randomServersTests
++      describe "Sovereign registry encoding" sovereignRegistryTests
+ #if !defined(dbPostgres)
+       around (tmpTestBracket chatQueryStats agentQueryStats) $ describe "names tests" chatNamesTests
+       around (tmpTestBracket chatQueryStats agentQueryStats) $ xdescribe'' "SimpleX Directory names" directoryNameTests
+@@ -86,6 +88,7 @@ main = do
+ #if !defined(dbPostgres)
+           describe "Mobile API Tests" mobileTests
+ #endif
++          describe "Sovereign registry store" sovereignRegistryStoreTests
+           describe "SimpleX chat client" chatTests
+           xdescribe'' "SimpleX Broadcast bot" broadcastBotTests
+           xdescribe'' "SimpleX Directory service bot" directoryServiceTests

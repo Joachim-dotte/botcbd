@@ -1,0 +1,9 @@
+/.gradle/
+/.prepare.*/
+/build/
+/gradle/
+/gradlew
+/gradlew.bat
+/local.properties
+/vendor/
+/smoke/build/

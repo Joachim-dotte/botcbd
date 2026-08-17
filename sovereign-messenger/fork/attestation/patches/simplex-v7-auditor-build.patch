@@ -1,0 +1,59 @@
+diff --git a/apps/multiplatform/android/build.gradle.kts b/apps/multiplatform/android/build.gradle.kts
+index 5255319..41a67c1 100644
+--- a/apps/multiplatform/android/build.gradle.kts
++++ b/apps/multiplatform/android/build.gradle.kts
+@@ -9,7 +9,7 @@ plugins {
+ }
+ 
+ android {
+-    compileSdk = 35
++    compileSdk = 36
+ 
+     defaultConfig {
+         applicationId = "chat.simplex.app"
+diff --git a/apps/multiplatform/common/build.gradle.kts b/apps/multiplatform/common/build.gradle.kts
+index 9884536..19e08d4 100644
+--- a/apps/multiplatform/common/build.gradle.kts
++++ b/apps/multiplatform/common/build.gradle.kts
+@@ -98,6 +98,7 @@ kotlin {
+     val androidMain by getting {
+       kotlin.srcDir("build/generated/moko/androidMain/src")
+       dependencies {
++        implementation(project(":auditor-alpha"))
+         implementation("androidx.activity:activity-compose:1.9.1")
+         val workVersion = "2.9.1"
+         implementation("androidx.work:work-runtime-ktx:$workVersion")
+@@ -159,7 +160,7 @@ kotlin {
+ 
+ android {
+   namespace = "chat.simplex.common"
+-  compileSdk = 35
++  compileSdk = 36
+   sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
+   defaultConfig {
+     minSdk = 26
+diff --git a/apps/multiplatform/gradle.properties b/apps/multiplatform/gradle.properties
+index b4a7b43..cfcc8bf 100644
+--- a/apps/multiplatform/gradle.properties
++++ b/apps/multiplatform/gradle.properties
+@@ -15,6 +15,7 @@ org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+ # Android operating system, and which are packaged with your app"s APK
+ # https://developer.android.com/topic/libraries/support-library/androidx-rn
+ android.useAndroidX=true
++android.suppressUnsupportedCompileSdk=36
+ # Kotlin code style for this project: "official" or "obsolete":
+ kotlin.code.style=official
+ # Enables namespacing of each library's R class so that its R class includes only the
+diff --git a/apps/multiplatform/settings.gradle.kts b/apps/multiplatform/settings.gradle.kts
+index 50a50d5..707dc2a 100644
+--- a/apps/multiplatform/settings.gradle.kts
++++ b/apps/multiplatform/settings.gradle.kts
+@@ -19,3 +19,8 @@ pluginManagement {
+ rootProject.name = "app"
+ 
+ include(":android", ":desktop", ":common")
++
++val sovereignAuditorModuleDir = providers.gradleProperty("sovereignAuditorModuleDir").orNull
++    ?: throw GradleException("missing -PsovereignAuditorModuleDir=/absolute/path/to/vendor/Auditor/app")
++include(":auditor-alpha")
++project(":auditor-alpha").projectDir = file(sovereignAuditorModuleDir)
