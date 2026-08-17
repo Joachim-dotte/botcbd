@@ -100,7 +100,7 @@ jobs:
           {
             echo "sdk.dir=$ANDROID_SDK_ROOT"
             echo "ndk.dir=$ANDROID_SDK_ROOT/ndk/23.1.7779620"
-            echo "compression.level=0"
+            echo "compression.level=9"
             echo "debuggable=true"
             echo "application_id.suffix=.sovereign.alpha"
             echo "app.name=Sovereign Messenger Alpha"
