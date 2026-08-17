@@ -1,0 +1,74 @@
+name: Deliver verified secure messenger APK
+
+on:
+  push:
+    branches:
+      - 'agent/secure-messenger-delivery'
+    paths:
+      - '.github/workflows/deliver-secure-messenger.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-and-package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Download official SimpleX Android release
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p output
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output output/SimpleX-v7.0.0-Pixel-aarch64.apk \
+            https://github.com/simplex-chat/simplex-chat/releases/download/v7.0.0/simplex-aarch64.apk
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output output/SimpleX-v7.0.0-Pixel-aarch64.apk.asc \
+            https://github.com/simplex-chat/simplex-chat/releases/download/v7.0.0/_simplex-aarch64.apk.asc
+
+      - name: Verify published SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd output
+          echo 'bfee98b34854ed87f85ca4500f2d0ee0445ffe8408ab373bdd8f87c3f8e85c33  SimpleX-v7.0.0-Pixel-aarch64.apk' | sha256sum --check | tee SHA256_VERIFICATION.txt
+          sha256sum SimpleX-v7.0.0-Pixel-aarch64.apk > SHA256SUMS.txt
+
+      - name: Verify official OpenPGP signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          mkdir -m 700 "$GNUPGHOME"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "$RUNNER_TEMP/simplex-release-key.asc" \
+            https://keys.openpgp.org/vks/v1/by-fingerprint/BBDF7BDAD1548B16836AF5B9D53BDFD153C366BA
+          gpg --batch --import "$RUNNER_TEMP/simplex-release-key.asc"
+          fingerprint="$(gpg --batch --with-colons --fingerprint | awk -F: '$1 == "fpr" {print $10; exit}')"
+          test "$fingerprint" = 'BBDF7BDAD1548B16836AF5B9D53BDFD153C366BA'
+          gpg --batch --verify \
+            output/SimpleX-v7.0.0-Pixel-aarch64.apk.asc \
+            output/SimpleX-v7.0.0-Pixel-aarch64.apk \
+            2>&1 | tee output/OPENPGP_VERIFICATION.txt
+
+      - name: Verify APK container and Android signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -t output/SimpleX-v7.0.0-Pixel-aarch64.apk | tee output/APK_ZIP_TEST.txt
+          apksigner_path="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -n "$apksigner_path"
+          "$apksigner_path" verify --verbose --print-certs \
+            output/SimpleX-v7.0.0-Pixel-aarch64.apk \
+            | tee output/APK_SIGNATURE.txt
+
+      - name: Publish verified APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: SimpleX-v7.0.0-Pixel-aarch64-verified
+          path: output/
+          if-no-files-found: error
+          retention-days: 30
