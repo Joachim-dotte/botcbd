@@ -1,5 +1,5 @@
 diff --git a/apps/multiplatform/android/build.gradle.kts b/apps/multiplatform/android/build.gradle.kts
-index 5255319..41a67c1 100644
+index 5255319..d2070e5 100644
 --- a/apps/multiplatform/android/build.gradle.kts
 +++ b/apps/multiplatform/android/build.gradle.kts
 @@ -9,7 +9,7 @@ plugins {
@@ -11,6 +11,15 @@ index 5255319..41a67c1 100644
  
      defaultConfig {
          applicationId = "chat.simplex.app"
+@@ -73,6 +73,7 @@ android {
+     }
+     packaging {
+         resources {
+             excludes += "/META-INF/{AL2.0,LGPL2.1}"
++            excludes += "META-INF/versions/*/OSGI-INF/MANIFEST.MF"
+         }
+         jniLibs.useLegacyPackaging = rootProject.extra["compression.level"] as Int != 0
+     }
 diff --git a/apps/multiplatform/common/build.gradle.kts b/apps/multiplatform/common/build.gradle.kts
 index 9884536..19e08d4 100644
 --- a/apps/multiplatform/common/build.gradle.kts
