@@ -50,6 +50,13 @@ android {
     }
 }
 
+// SimpleX v7 registers a root-level KotlinCompile rule with JVM 11 for every
+// subproject. Configure the concrete Auditor tasks after that shared rule so
+// their Kotlin bytecode remains aligned with the Java 17 toolchain above.
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+}
+
 dependencies {
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("androidx.biometric:biometric:1.1.0")
