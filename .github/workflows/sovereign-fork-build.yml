@@ -31,7 +31,6 @@ jobs:
         with:
           distribution: temurin
           java-version: "17.0.14+7"
-          cache: none
 
       - name: Set up Gradle without remote cache
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
