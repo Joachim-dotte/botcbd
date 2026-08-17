@@ -44,6 +44,16 @@ index b4a7b43..cfcc8bf 100644
  # Kotlin code style for this project: "official" or "obsolete":
  kotlin.code.style=official
  # Enables namespacing of each library's R class so that its R class includes only the
+@@ -33,7 +34,7 @@ android.version_code=366
+ desktop.version_name=7.0
+ desktop.version_code=155
+ 
+ kotlin.version=2.1.20
+-gradle.plugin.version=8.7.0
++gradle.plugin.version=8.9.1
+ compose.version=1.8.2
+ 
+ # Choose sqlite or postgres backend
 diff --git a/apps/multiplatform/settings.gradle.kts b/apps/multiplatform/settings.gradle.kts
 index 50a50d5..707dc2a 100644
 --- a/apps/multiplatform/settings.gradle.kts
