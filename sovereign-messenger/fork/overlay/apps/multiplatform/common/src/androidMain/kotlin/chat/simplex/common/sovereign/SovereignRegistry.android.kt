@@ -182,21 +182,23 @@ private object AndroidSovereignRegistry : SovereignRegistry {
     return bytes.toByteArray()
   }
 
-  private fun decodePayload(payload: ByteArray): SovereignRegistryEntry? = try {
-    DataInputStream(ByteArrayInputStream(payload)).use { input ->
-      val sequence = input.readLong()
-      val timeBucket = input.readLong()
-      val ordinal = input.readUnsignedByte()
-      val fieldCount = input.readUnsignedByte()
-      if (sequence <= 0L || timeBucket < 0L || ordinal !in SovereignDiagnosticEventCode.entries.indices || fieldCount > 8) return null
-      val fields = buildMap {
-        repeat(fieldCount) { put(readShortUtf8(input), readShortUtf8(input)) }
+  private fun decodePayload(payload: ByteArray): SovereignRegistryEntry? {
+    return try {
+      DataInputStream(ByteArrayInputStream(payload)).use { input ->
+        val sequence = input.readLong()
+        val timeBucket = input.readLong()
+        val ordinal = input.readUnsignedByte()
+        val fieldCount = input.readUnsignedByte()
+        if (sequence <= 0L || timeBucket < 0L || ordinal !in SovereignDiagnosticEventCode.entries.indices || fieldCount > 8) return@use null
+        val fields = buildMap {
+          repeat(fieldCount) { put(readShortUtf8(input), readShortUtf8(input)) }
+        }
+        if (input.available() != 0 || SovereignDiagnosticFieldPolicy.sanitize(fields) != fields) return@use null
+        SovereignRegistryEntry(sequence, timeBucket, SovereignDiagnosticEventCode.entries[ordinal], fields)
       }
-      if (input.available() != 0 || SovereignDiagnosticFieldPolicy.sanitize(fields) != fields) return null
-      SovereignRegistryEntry(sequence, timeBucket, SovereignDiagnosticEventCode.entries[ordinal], fields)
+    } catch (_: Exception) {
+      null
     }
-  } catch (_: Exception) {
-    null
   }
 
   private fun writeShortUtf8(out: DataOutputStream, value: String) {
@@ -212,27 +214,33 @@ private object AndroidSovereignRegistry : SovereignRegistry {
     return String(ByteArray(length).also(input::readFully), StandardCharsets.UTF_8)
   }
 
-  private fun eventMac(token: String, payload: ByteArray, previous: ByteArray): ByteArray? = try {
-    Mac.getInstance("HmacSHA256").run {
-      init(registryKey() ?: return null)
-      update(domain)
-      update(token.toByteArray(StandardCharsets.US_ASCII))
-      update(previous)
-      doFinal(payload)
+  private fun eventMac(token: String, payload: ByteArray, previous: ByteArray): ByteArray? {
+    return try {
+      val key = registryKey() ?: return null
+      Mac.getInstance("HmacSHA256").run {
+        init(key)
+        update(domain)
+        update(token.toByteArray(StandardCharsets.US_ASCII))
+        update(previous)
+        doFinal(payload)
+      }
+    } catch (_: Exception) {
+      null
     }
-  } catch (_: Exception) {
-    null
   }
 
-  private fun scopeToken(scope: Long?): String? = try {
-    Mac.getInstance("HmacSHA256").run {
-      init(registryKey() ?: return null)
-      update(scopeDomain)
-      val value = scope ?: Long.MIN_VALUE
-      doFinal(ByteBuffer.allocate(8).putLong(value).array()).copyOf(16).toHex()
+  private fun scopeToken(scope: Long?): String? {
+    return try {
+      val key = registryKey() ?: return null
+      Mac.getInstance("HmacSHA256").run {
+        init(key)
+        update(scopeDomain)
+        val value = scope ?: Long.MIN_VALUE
+        doFinal(ByteBuffer.allocate(8).putLong(value).array()).copyOf(16).toHex()
+      }
+    } catch (_: Exception) {
+      null
     }
-  } catch (_: Exception) {
-    null
   }
 
   private fun registryKey(): SecretKey? {
