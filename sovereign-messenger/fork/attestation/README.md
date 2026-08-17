@@ -79,9 +79,10 @@ cd /path/to/simplex-chat-v7.0.0/apps/multiplatform
   :android:assembleDebug
 ```
 
-The build patch adds `:auditor-alpha`, the Android-source-set dependency, compile SDK 36 and AGP
-8.9.1. This Pixel/GrapheneOS alpha deliberately sets min SDK 34: Java records are native from
-Android 14, and older platform releases are outside its supported security profile.
+The build patch adds `:auditor-alpha`, the Android-source-set dependency, compile SDK 36, AGP 8.9.1
+and a consistent JVM 17 target for the host and Auditor. This Pixel/GrapheneOS alpha deliberately
+sets min SDK 34: Java records are native from Android 14, and older platform releases are outside
+its supported security profile.
 
 Until the core database owns a random token, the Android actual derives a stable 32-byte scope token
 as `HMAC-SHA-256(domain || contactId)` using a non-exportable Android Keystore key. The key must be
