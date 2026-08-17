@@ -46,7 +46,7 @@ index 9884536..19e08d4 100644
    defaultConfig {
      minSdk = 26
 diff --git a/apps/multiplatform/gradle.properties b/apps/multiplatform/gradle.properties
-index b4a7b43..cfcc8bf 100644
+index b4a7b43..REDACTED 100644
 --- a/apps/multiplatform/gradle.properties
 +++ b/apps/multiplatform/gradle.properties
 @@ -15,6 +15,7 @@ org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
@@ -57,6 +57,15 @@ index b4a7b43..cfcc8bf 100644
  # Kotlin code style for this project: "official" or "obsolete":
  kotlin.code.style=official
  # Enables namespacing of each library's R class so that its R class includes only the
+@@ -22,7 +23,7 @@ kotlin.code.style=official
+ # thereby reducing the size of the R class for that library
+ android.nonTransitiveRClass=true
+ kotlin.mpp.androidSourceSetLayoutVersion=2
+-kotlin.jvm.target=11
++kotlin.jvm.target=17
+ 
+ android.version_name=7.0
+ android.version_code=366
 @@ -33,7 +34,7 @@ android.version_code=366
  desktop.version_name=7.0
  desktop.version_code=155
