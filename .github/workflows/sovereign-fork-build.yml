@@ -1,0 +1,126 @@
+name: Sovereign fork build proof
+
+on:
+  push:
+    branches:
+      - agent/sovereign-fork-build
+    paths:
+      - ".github/workflows/sovereign-fork-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sovereign-fork-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-arm64-alpha:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout workflow repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Set up exact JDK
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: "17.0.14+7"
+          cache: none
+
+      - name: Set up Gradle without remote cache
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
+        with:
+          cache-disabled: true
+          validate-wrappers: true
+
+      - name: Install Android SDK components
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager             "platforms;android-35"             "build-tools;35.0.0"             "platform-tools"             "ndk;23.1.7779620"             "cmake;3.22.1"
+
+      - name: Fetch pinned upstream source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch v7.0.0 https://github.com/simplex-chat/simplex-chat.git simplex-chat
+          test "$(git -C simplex-chat rev-parse HEAD)" = "e11128ce5b0df538c57a0d0b6911de0e88fdb652"
+          git -C simplex-chat status --porcelain=v1
+          git -C simplex-chat rev-parse HEAD | tee upstream-commit.txt
+
+      - name: Import and verify unchanged native messaging core
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 4 --proto '=https'             https://github.com/simplex-chat/simplex-chat/releases/download/v7.0.0/simplex-aarch64.apk             --output official-simplex-aarch64.apk
+          echo "bfee98b34854ed87f85ca4500f2d0ee0445ffe8408ab373bdd8f87c3f8e85c33  official-simplex-aarch64.apk" | sha256sum --check
+          lib_dir="simplex-chat/apps/multiplatform/common/src/commonMain/cpp/android/libs/arm64-v8a"
+          mkdir -p "$lib_dir"
+          unzip -p official-simplex-aarch64.apk lib/arm64-v8a/libsimplex.so > "$lib_dir/libsimplex.so"
+          unzip -p official-simplex-aarch64.apk lib/arm64-v8a/libsupport.so > "$lib_dir/libsupport.so"
+          test -s "$lib_dir/libsimplex.so"
+          test -s "$lib_dir/libsupport.so"
+          sha256sum "$lib_dir/libsimplex.so" "$lib_dir/libsupport.so" | tee native-core.sha256
+
+      - name: Configure isolated arm64 alpha
+        shell: bash
+        working-directory: simplex-chat/apps/multiplatform
+        run: |
+          set -euo pipefail
+          {
+            echo "sdk.dir=$ANDROID_SDK_ROOT"
+            echo "ndk.dir=$ANDROID_SDK_ROOT/ndk/23.1.7779620"
+            echo "compression.level=0"
+            echo "enable_debuggable=true"
+            echo "application_id.suffix=.sovereign.alpha"
+            echo "app.name=Sovereign Messenger Alpha"
+          } > local.properties
+          perl -0pi -e 's/include\("armeabi-v7a",\s*"arm64-v8a"\)/include("arm64-v8a")/' android/build.gradle.kts
+          grep -F 'include("arm64-v8a")' android/build.gradle.kts
+
+      - name: Build Android alpha
+        shell: bash
+        working-directory: simplex-chat/apps/multiplatform
+        env:
+          GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx6g
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace :android:assembleDebug -Psimplex.assets.dir=../../assets
+
+      - name: Verify and package APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          mapfile -t apks < <(find simplex-chat/apps/multiplatform/android/build/outputs/apk/debug -type f -name '*.apk' | sort)
+          test "${#apks[@]}" -ge 1
+          cp "${apks[0]}" dist/Sovereign-Messenger-v0.1.0-alpha-arm64.apk
+          apksigner verify --verbose --print-certs dist/Sovereign-Messenger-v0.1.0-alpha-arm64.apk | tee dist/APKSIGNER-VERIFY.txt
+          aapt dump badging dist/Sovereign-Messenger-v0.1.0-alpha-arm64.apk | tee dist/APK-BADGING.txt
+          sha256sum dist/Sovereign-Messenger-v0.1.0-alpha-arm64.apk | tee dist/SHA256SUMS
+          cp upstream-commit.txt native-core.sha256 dist/
+          {
+            echo "ALPHA BUILD - NOT PRODUCTION"
+            echo "Upstream source: simplex-chat/simplex-chat v7.0.0"
+            echo "Upstream commit: e11128ce5b0df538c57a0d0b6911de0e88fdb652"
+            echo "Native core imported byte-for-byte from verified official APK."
+            echo "This workflow proves buildability only; Sovereign security extensions are not in this build yet."
+            echo "Signing: ephemeral Android debug key."
+          } > dist/BUILD-STATUS.txt
+
+      - name: Upload proof artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: sovereign-fork-build-proof-${{ github.sha }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
