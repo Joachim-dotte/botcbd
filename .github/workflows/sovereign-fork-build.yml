@@ -19,6 +19,9 @@ jobs:
   build-arm64-alpha:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
       - name: Checkout workflow repository
@@ -42,8 +45,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager             "platforms;android-35"             "build-tools;35.0.0"             "platform-tools"             "ndk;23.1.7779620"             "cmake;3.22.1"
+          sdkmanager_bin="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$sdkmanager_bin"
+          yes | "$sdkmanager_bin" --licenses >/dev/null || true
+          "$sdkmanager_bin"             "platforms;android-35"             "build-tools;35.0.0"             "platform-tools"             "ndk;23.1.7779620"             "cmake;3.22.1"
 
       - name: Fetch pinned upstream source
         shell: bash
