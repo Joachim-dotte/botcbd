@@ -2,7 +2,7 @@ diff --git a/apps/multiplatform/android/build.gradle.kts b/apps/multiplatform/an
 index 5255319..d2070e5 100644
 --- a/apps/multiplatform/android/build.gradle.kts
 +++ b/apps/multiplatform/android/build.gradle.kts
-@@ -9,7 +9,7 @@ plugins {
+@@ -9,10 +9,10 @@ plugins {
  }
  
  android {
@@ -11,6 +11,10 @@ index 5255319..d2070e5 100644
  
      defaultConfig {
          applicationId = "chat.simplex.app"
+         namespace = "chat.simplex.app"
+-        minSdk = 26
++        minSdk = 34
+         targetSdk = 35
 @@ -73,6 +73,7 @@ android {
      }
      packaging {
