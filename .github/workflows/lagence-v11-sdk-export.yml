@@ -18,29 +18,15 @@ jobs:
           MANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
           test -x "$MANAGER"
           yes | "$MANAGER" --licenses >/dev/null || true
-          "$MANAGER" --list > sdk-list.txt
-          grep -E 'platforms;android-(35|36|37)|build-tools;(35|36|37)' sdk-list.txt
-          PACKAGE=''
-          for p in 'platforms;android-37.0' 'platforms;android-37' 'platforms;android-36.1' 'platforms;android-36' 'platforms;android-35'; do
-            if awk -F'|' '{gsub(/^[ \t]+|[ \t]+$/, "", $1);print $1}' sdk-list.txt | grep -Fxq "$p"; then PACKAGE="$p"; break; fi
-          done
-          test -n "$PACKAGE"
-          TOOLS=''
-          for t in '37.0.0' '36.0.0' '35.0.0'; do
-            if awk -F'|' '{gsub(/^[ \t]+|[ \t]+$/, "", $1);print $1}' sdk-list.txt | grep -Fxq "build-tools;$t"; then TOOLS="$t"; break; fi
-          done
-          test -n "$TOOLS"
-          "$MANAGER" --install "$PACKAGE" "build-tools;$TOOLS"
-          PLATFORM="$SDK/${PACKAGE/;/\/}"
+          "$MANAGER" --install 'platforms;android-37.0' 'build-tools;37.0.0'
+          PLATFORM="$SDK/platforms/android-37.0"
           test -s "$PLATFORM/android.jar"
-          test -x "$SDK/build-tools/$TOOLS/aapt2"
-          mkdir -p staging/platform staging/build-tools staging/test-deps
+          test -x "$SDK/build-tools/37.0.0/aapt2"
+          mkdir -p staging/platform staging/build-tools
           cp "$PLATFORM/android.jar" "$PLATFORM/source.properties" staging/platform/
-          cp -a "$SDK/build-tools/$TOOLS" staging/build-tools/
-          cp sdk-list.txt staging/
+          cp -a "$SDK/build-tools/37.0.0" staging/build-tools/
           cat "$PLATFORM/source.properties"
-          cat "$SDK/build-tools/$TOOLS/source.properties"
-          npm install --prefix staging/test-deps --ignore-scripts --no-audit --no-fund express@5.2.1 dotenv@17.2.0 telegraf@4.16.3
+          cat "$SDK/build-tools/37.0.0/source.properties"
           tar -czf toolchain.tar.gz -C staging .
       - name: Encrypt for the requesting local build environment
         shell: bash
@@ -80,7 +66,7 @@ jobs:
       - name: Transfer encrypted toolchain
         uses: actions/upload-artifact@v4
         with:
-          name: LAgence-v11-encrypted-toolchain
+          name: LAgence-v11-encrypted-toolchain-API37
           path: export/
           if-no-files-found: error
           retention-days: 1
