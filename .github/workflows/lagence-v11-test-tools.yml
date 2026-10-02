@@ -1,0 +1,69 @@
+name: LAgence v11 - pinned local test tools
+on:
+  push:
+    branches: ['build/lagence-v11-sdk-20261002']
+    paths: ['.github/workflows/lagence-v11-test-tools.yml']
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Retrieve exact public dependency archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p staging/tarballs staging/bin
+          npm pack --ignore-scripts --pack-destination staging/tarballs content-disposition@1.0.1 iconv-lite@0.7.2 media-typer@1.1.0 negotiator@1.0.0 proxy-addr@2.0.7 range-parser@1.2.1
+          if ! command -v age >/dev/null || ! command -v age-keygen >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends age
+          fi
+          cp "$(command -v age)" "$(command -v age-keygen)" staging/bin/
+          age --version
+          sha256sum staging/tarballs/* staging/bin/* > staging/SHA256SUMS.txt
+          tar -czf toolchain.tar.gz -C staging .
+      - name: Encrypt transfer for the local build environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p export
+          cat > recipient-public.pem <<'PEM'
+          -----BEGIN PUBLIC KEY-----
+          MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAooOWdozgDPItLGCAwCSn
+          ug+wK4E3Ri1D/UyK497SKWsRyFmJqlDmiu/lXxlK3n3PTpFy3qeZkciZDXapQ6Ap
+          lTw6Y3It7LRO5V5puYT2OqgngMzGEHUtojqriEThDKBraSNfD89f0amQeJi+/27h
+          lSQwQGOo3qawse35pXofuj3FQr1SQ6u747+SbwqZeikkaw8wWaHfM4lOLLrPSJtO
+          nlA0gGntJG0Dg6bxFX5K4cNevriJbh8TAMK6nzL7QO+goLgSzrsXFORBHdH8/4ZZ
+          kOqkFCFmq4uNXyXzlvEqQ25jFIHctyYP3XT5z+IiJN26AtguPvAZNyfDBArR2YAZ
+          WJv+nW/KiaQFNCkgoYnzWjlcNum0nrVZ4xJX9/R9yUYD5kAm9BnWdYcNZ6G+qeQe
+          JvGrwArF5Z6tDRvfFdUK8/tpzI0cJkLAVo8st90Scf4mvVmkaoGMYevcr/6yJLnY
+          t6Y/FmAjZPM4SBfwRQHQKXGrgjFCBXJyz2GHAS0zJJVLAgMBAAE=
+          -----END PUBLIC KEY-----
+          PEM
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,hmac,secrets,subprocess
+          secret=secrets.token_bytes(80)
+          key,iv,mac_key=secret[:32],secret[32:48],secret[48:]
+          Path('transfer-key.bin').write_bytes(secret)
+          subprocess.run(['openssl','enc','-aes-256-cbc','-K',key.hex(),'-iv',iv.hex(),'-in','toolchain.tar.gz','-out','export/toolchain.enc'],check=True)
+          mac=hmac.new(mac_key,iv,hashlib.sha256)
+          with open('export/toolchain.enc','rb') as f:
+              for b in iter(lambda:f.read(1024*1024),b''):mac.update(b)
+          Path('export/tag.txt').write_text(mac.hexdigest()+'\n')
+          subprocess.run(['openssl','pkeyutl','-encrypt','-pubin','-inkey','recipient-public.pem','-pkeyopt','rsa_padding_mode:oaep','-pkeyopt','rsa_oaep_md:sha256','-pkeyopt','rsa_mgf1_md:sha256','-in','transfer-key.bin','-out','export/keys.enc'],check=True)
+          Path('transfer-key.bin').unlink()
+          print('Only public dependency archives and backup test tools were retrieved; app sources and secrets remain local.')
+          PY
+          rm -f toolchain.tar.gz
+      - name: Transfer encrypted test tools
+        uses: actions/upload-artifact@v4
+        with:
+          name: LAgence-v11-encrypted-pinned-test-tools
+          path: export/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
