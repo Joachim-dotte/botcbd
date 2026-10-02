@@ -10,25 +10,24 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - name: Install official Android SDK packages
+      - name: Retrieve official build and test tools
         shell: bash
         run: |
           set -euo pipefail
           SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
           MANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
-          test -x "$MANAGER"
           yes | "$MANAGER" --licenses >/dev/null || true
           "$MANAGER" --install 'platforms;android-37.0' 'build-tools;37.0.0'
-          PLATFORM="$SDK/platforms/android-37.0"
-          test -s "$PLATFORM/android.jar"
-          test -x "$SDK/build-tools/37.0.0/aapt2"
-          mkdir -p staging/platform staging/build-tools
-          cp "$PLATFORM/android.jar" "$PLATFORM/source.properties" staging/platform/
+          mkdir -p staging/platform staging/build-tools staging/test-deps staging/bin staging/tarballs
+          cp "$SDK/platforms/android-37.0/android.jar" "$SDK/platforms/android-37.0/source.properties" staging/platform/
           cp -a "$SDK/build-tools/37.0.0" staging/build-tools/
-          cat "$PLATFORM/source.properties"
-          cat "$SDK/build-tools/37.0.0/source.properties"
+          npm install --prefix staging/test-deps --ignore-scripts --no-audit --no-fund express@5.2.1 dotenv@17.2.0 telegraf@4.16.3
+          npm pack --ignore-scripts --pack-destination staging/tarballs content-disposition@1.0.1 iconv-lite@0.7.2 media-typer@1.1.0 negotiator@1.0.0 proxy-addr@2.0.7 range-parser@1.2.1
+          command -v age >/dev/null || { sudo apt-get update -qq; sudo apt-get install -y --no-install-recommends age; }
+          cp "$(command -v age)" "$(command -v age-keygen)" staging/bin/
+          cat "$SDK/platforms/android-37.0/source.properties"
           tar -czf toolchain.tar.gz -C staging .
-      - name: Encrypt for the requesting local build environment
+      - name: Encrypt for the current local build environment
         shell: bash
         run: |
           set -euo pipefail
@@ -36,15 +35,15 @@ jobs:
           mkdir -p export
           cat > recipient-public.pem <<'PEM'
           -----BEGIN PUBLIC KEY-----
-          MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAooOWdozgDPItLGCAwCSn
-          ug+wK4E3Ri1D/UyK497SKWsRyFmJqlDmiu/lXxlK3n3PTpFy3qeZkciZDXapQ6Ap
-          lTw6Y3It7LRO5V5puYT2OqgngMzGEHUtojqriEThDKBraSNfD89f0amQeJi+/27h
-          lSQwQGOo3qawse35pXofuj3FQr1SQ6u747+SbwqZeikkaw8wWaHfM4lOLLrPSJtO
-          nlA0gGntJG0Dg6bxFX5K4cNevriJbh8TAMK6nzL7QO+goLgSzrsXFORBHdH8/4ZZ
-          kOqkFCFmq4uNXyXzlvEqQ25jFIHctyYP3XT5z+IiJN26AtguPvAZNyfDBArR2YAZ
-          WJv+nW/KiaQFNCkgoYnzWjlcNum0nrVZ4xJX9/R9yUYD5kAm9BnWdYcNZ6G+qeQe
-          JvGrwArF5Z6tDRvfFdUK8/tpzI0cJkLAVo8st90Scf4mvVmkaoGMYevcr/6yJLnY
-          t6Y/FmAjZPM4SBfwRQHQKXGrgjFCBXJyz2GHAS0zJJVLAgMBAAE=
+          MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAoGd1h1wiSO4mNVrlpNEE
+          iPZDTsaw0QHLpmDPhzKh0Mv17/jjnVqAd+GXo4ijudzt8+hllC/i4m06R60oWt9p
+          /SyYVPX+bB0Bf7ogb5B/ACVgKxCY5ZWLcwb2uLfL2TWTZ5f7vtf5d+HbuV6Pe8+J
+          xIrRNAfZEe0LJUHkhiHgNxKBgV1J3RHr2A4tOaPw2NdLQrK263t2pJSF2WZxxVj5
+          6Me53QWB51WiF4cuqVo9fWSyCxNdjPKZcF/F2QhhYVa6umexas4j+eTQNit2ozNZ
+          Y1tlyEEEILtql3ZxYb5h3GLe9CXF1L9dV5zptJ3RQIHuCKrDVt5lsE99qnX511EG
+          PBhI4sSOyjaOwQRmpXflr+V9+RPgjnR4jZwpVMM+4IA60vQVnVik+U+VkB2RxgaZ
+          ZJ63PNBHPVZqRqavqQT3jQ8C5123VhVLJkcgcTZlrizE7zswmBL0x2j2Tt/NIoWl
+          xzT3LmP2DPOkaoGjSUXcyxYCJZrKuLsNjgdcsHB7HuyhAgMBAAE=
           -----END PUBLIC KEY-----
           PEM
           python3 - <<'PY'
@@ -60,13 +59,10 @@ jobs:
           Path('export/tag.txt').write_text(mac.hexdigest()+'\n')
           subprocess.run(['openssl','pkeyutl','-encrypt','-pubin','-inkey','recipient-public.pem','-pkeyopt','rsa_padding_mode:oaep','-pkeyopt','rsa_oaep_md:sha256','-pkeyopt','rsa_mgf1_md:sha256','-in','transfer-key.bin','-out','export/keys.enc'],check=True)
           Path('transfer-key.bin').unlink()
-          print('Encrypted SDK transfer prepared; no app source, signing key, or Telegram credentials uploaded.')
           PY
-          rm -f toolchain.tar.gz
-      - name: Transfer encrypted toolchain
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: LAgence-v11-encrypted-toolchain-API37
+          name: LAgence-v11-auditfix-build-tools
           path: export/
           if-no-files-found: error
           retention-days: 1
