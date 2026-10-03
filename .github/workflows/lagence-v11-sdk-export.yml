@@ -34,15 +34,15 @@ jobs:
           mkdir -p export
           cat > recipient-public.pem <<'PEM'
           -----BEGIN PUBLIC KEY-----
-          MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAxAfR513k8C3l3fEGZWod
-          6RQMrOzgK52snSSavMbplT8sOoiFZ7KxMW9MfE1zJji7pnC0sl+bUAZtIMXxCent
-          mo5GUbVKAk8kPUypNHQW3D6axgATAtybU+Sm0uL4dpzfv+70g9iEhq7FOxJ1XBLc
-          TrVLLUDeEzmb6DQ9q9XCMC5xDT8fS83BN+9RvlPMl655EIygQ3BKdt+2sy0R9rDO
-          c1042hbqgzvRo3SN/kmj1la51rWGJBG4l+5hgaLrCfrfBphDlXJ2m1zA4FMfbWUv
-          88rMnjqjiYuGgFUobED7nMWhb1m3UTQcc4kH/nnq6J2tjupOHUPxhVflZ3BCcarG
-          wCvvUAoFfgryE38Jr1X/pKsLIRLIHlbR4yQwQh/+DMhXN8YTOAKkvF6Ke3Rdzlgy
-          MLn+Oce/FkNQBSX0Ia2VcpmjJKGWV/BUm5eqWw25mwTrzEIuy80tNIhsVYkwuHrf
-          im7QtQ+dYTxijpTaxMYV+R2OwcE1sufKg6+Exptsd7ZRAgMBAAE=
+          MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAsR0ELP7wEbqZD4KgCxth
+          BO2XQSjx7wbxl2KWOKrkcGH9p5v0+MvRVtZoRDbBIz4BRQSgSPUeb1+6uypII840
+          h5NOmko++WK0a1FD22r6LMB/s9rDIo7Bqbi/2cTwpQGXPVFVbkrRrEcInEMG8bA5
+          bNs+6cMoYUS3jUDdtl63hKuecHQNtIsxzI7OjxfitpLC3LXR1/h+qmi9D2Lnvh1N
+          ttt76N3DdCGw3GjKddg1N6uTkAuyoGSceVzL6Aj/+4ULBCie5PrY8rCd6GEA4SKr
+          Q+173cqoNzsfmJQNUDoThZEluaOmG72X5wWbSaXWUkf1J8wjo6J65cvlsvXV4LKL
+          RcQ+OWdYG55lxCEQbLKpH/DykIUHCKP2wQ6q7fjv717Fb1NxWIxmkvKnICrknRTi
+          HHCliM0OhLoFE4oF36hYKL0Hz8DV4tZmMvrOMtQWr8xpphFJ59YH5CxieQvlNl9A
+          rgAyK5MfaYhbz7XzWSj5XaeRasTdWxfAQw1+FPFwP1vJAgMBAAE=
           -----END PUBLIC KEY-----
           PEM
           python3 - <<'PY'
@@ -58,11 +58,11 @@ jobs:
           Path('export/tag.txt').write_text(mac.hexdigest()+'\n')
           subprocess.run(['openssl','pkeyutl','-encrypt','-pubin','-inkey','recipient-public.pem','-pkeyopt','rsa_padding_mode:oaep','-pkeyopt','rsa_oaep_md:sha256','-pkeyopt','rsa_mgf1_md:sha256','-in','transfer-key.bin','-out','export/keys.enc'],check=True)
           Path('transfer-key.bin').unlink()
-          print('Only official SDK and public npm test tools; application source and all user secrets remain local.')
+          print('Only official SDK and public npm tools; application source, signing keys and user data remain local.')
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: LAgence-v1102-local-build-tools
+          name: LAgence-v1103-local-build-tools
           path: export/
           if-no-files-found: error
           retention-days: 1
